@@ -28,6 +28,27 @@ contains no vendor or employer code.
   tested and the node wiring is tested against stubs (see Testing); live
   validation against `rmf_demos` is still to do.
 
+## Where this fits: adapter vs node
+
+In OpenRMF, "lift adapter" names a role, not a process: adapting one
+specific lift to RMF's lift protocol. In a split deployment that role
+spans two processes:
+
+```
+Fleet adapters ──LiftRequest──► Lift Adapter ──LiftRequest──► Lift Node ──API──► Lift Controller
+                                (RMF-facing)   ◄──LiftState──  (hardware-facing)
+```
+
+This repository is the left half: the part that faces RMF, owns sessions,
+and publishes states. The right half — the Lift Node that owns the vendor
+API and the physical controller — is a separate process, and together the
+pair *is* the lift adapter for that elevator. The companion repository
+simulates the whole right-hand side so this half can be tested without
+hardware; see `docs/ARCHITECTURE.md` for the wiring.
+
+One vocabulary note: the `LiftRequest` messages are published by the fleet
+adapter, not by RMF Core itself.
+
 ## The one rule that matters
 
 The fleet treats a `LiftState` whose `session_id` matches its request as
@@ -110,11 +131,14 @@ commands, mock physics, and the node wiring (against stub `rclpy` /
 
 ## Companion repository
 
-[openrmf-lift-node-skeleton](https://github.com/apocosipadrino/openrmf-lift-node-skeleton)
-is the other side of the same conversation: a ROS 2 node that *is* a lift
-(simulated cabin, doors, and modes speaking `lift_requests` /
-`lift_states`). Run the two together to exercise an adapter end to end
-without Gazebo or a physical elevator.
+[openrmf-lift-sim-skeleton](https://github.com/apocosipadrino/openrmf-lift-sim-skeleton)
+is the other side of the same conversation: a simulated lift (cabin,
+doors, and modes speaking `lift_requests` / `lift_states`) that stands in
+for the Lift Node plus Lift Controller in the diagram above. Run the two
+together to exercise an adapter end to end without Gazebo or a physical
+elevator: run the sim on namespaced topics (`sim/lift_requests`,
+`sim/lift_states`) and give this adapter a backend that bridges to them —
+see `docs/ARCHITECTURE.md`.
 
 ## References
 

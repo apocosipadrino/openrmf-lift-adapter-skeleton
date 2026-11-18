@@ -23,6 +23,57 @@ The split is deliberate: everything that can be wrong about the *protocol*
 lives in code that runs under plain `python3`, and the ROS node is too thin
 to hide a protocol bug.
 
+## Adapter vs node: where this repo fits
+
+"lift adapter" names a role, not a process: adapting one specific lift to
+RMF's lift protocol. In a split deployment that role spans two processes:
+
+```
+Fleet adapters ──LiftRequest──► Lift Adapter ──LiftRequest──► Lift Node ──API──► Lift Controller
+                                (RMF-facing)   ◄──LiftState──  (hardware-facing)
+```
+
+- The **Lift Adapter** faces RMF: it receives requests, owns sessions,
+  and publishes states. That is this repository.
+- The **Lift Node** faces the hardware: it owns the vendor API and the
+  physical controller.
+- Together, the pair *is* the lift adapter for that elevator. Calling
+  either half "the adapter" on its own invites exactly the confusion this
+  split creates: both halves participate in adapting the lift, but neither
+  is the whole adapter.
+
+In the classic single-process pattern (the `roscon_workshop` reference),
+one node speaks RMF messages on one side and the vendor API on the other,
+with a manager behind a REST API; the diagram above is what that looks
+like when the two halves run as separate processes and happen to exchange
+`rmf_lift_msgs` between them.
+
+Vocabulary note: the `LiftRequest` messages are published by the fleet
+adapter, not by RMF Core itself. RMF Core (task dispatch, traffic
+scheduling) decides *that* a robot needs the lift; the fleet adapter is
+the component that speaks the lift protocol.
+
+## Wiring the adapter to the simulated lift
+
+The companion
+[openrmf-lift-sim-skeleton](https://github.com/apocosipadrino/openrmf-lift-sim-skeleton)
+repository simulates the whole right-hand side — Lift Node plus Lift
+Controller — as one node. To chain it behind this adapter:
+
+1. Run the sim on namespaced topics (`sim/lift_requests`,
+   `sim/lift_states`) via its `request_topic` / `state_topic` parameters,
+   so its messages never collide with the real lift topics.
+2. Implement a bridging backend for this adapter: a `LiftBackend` that
+   holds a subscription to `sim/lift_states` (caching the latest state
+   for `get_state`) and a publisher to `sim/lift_requests` (translating
+   `command` calls into `LiftRequest` messages). Construct it with the
+   node in `build_backend()`; the node's executor drives its callbacks.
+
+The bridge backend is deliberately not included here: it is ROS-aware by
+nature, and the `LiftBackend` interface stays ROS-free so the session
+controller and the mock backend remain testable without ROS. The topic
+parameters on both sides already allow the wiring.
+
 ## Session lifecycle
 
 ```
